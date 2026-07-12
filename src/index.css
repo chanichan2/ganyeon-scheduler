@@ -1,0 +1,134 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 디자인 토큰 — sonsesang2026 (Toss 디자인 시스템 기반 튜닝 값) 유지.
+   Tailwind 테마(tailwind.config.js)와 값이 동일해야 함. */
+:root {
+  --paper: #f2f4f6;
+  --card: #ffffff;
+  --ink: #191f28;
+  --body: #4e5968;
+  --mute: #8b95a1;
+  --faint: #b0b8c1;
+  --line: #e5e8eb;
+  --line-strong: #d1d6db;
+  --grid: #edeff2;
+  --unavail: #1b1d22;
+  --accent: #3e4fd6;
+  --accent-deep: #3140b0;
+  --accent-soft: #eef0fc;
+  --sun: #e0475c;
+  --sat: #3d7bf5;
+  --sh-subtle: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --sh-standard: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --sh-elevated: 0 4px 12px rgba(0, 0, 0, 0.12);
+  --r-sheet: 20px;
+  --r-card: 16px;
+  --r-ctl: 12px;
+  --r-blk: 10px;
+  /* 모션 — hover/press 150ms, 시트/탭 전환 250ms */
+  --ease-std: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* 세로 스크롤은 앱 프레임 안 <main>이 전담 — body 가 스크롤러로 잡히면
+   iOS 러버밴딩이 첫 팬 제스처를 가로챈다. */
+html,
+body {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  margin: 0;
+  /* 앱 프레임(paper) 바깥 데스크톱 거터 — 한 단계 어두운 line 톤 */
+  background: var(--line);
+  color: var(--ink);
+  font-family:
+    Pretendard, -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo',
+    'Noto Sans KR', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  -webkit-tap-highlight-color: transparent;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* 가로 스크롤 영역에서 스크롤바 숨김 */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* 날짜/뷰 전환 애니메이션 — 탭 전환 250ms */
+.day-anim {
+  animation: dayin 0.25s var(--ease-std);
+}
+@keyframes dayin {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* 헤더 하단 로딩 progress bar — 25% 너비의 그라디언트 막대가 좌→우로 슬라이드. */
+@keyframes ssProgress {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+.ss-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  overflow: hidden;
+  pointer-events: none;
+}
+.ss-progress::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 25%;
+  background: linear-gradient(90deg, transparent, var(--accent) 50%, transparent);
+  animation: ssProgress 1.4s linear infinite;
+}
+
+/* 유효 구간이 사라진(stale) 예약 칸 — 회색 빗금 오버레이 */
+.stale-hatch {
+  background: repeating-linear-gradient(
+    135deg,
+    rgba(139, 149, 161, 0.45) 0 4px,
+    rgba(139, 149, 161, 0.12) 4px 8px
+  );
+}
