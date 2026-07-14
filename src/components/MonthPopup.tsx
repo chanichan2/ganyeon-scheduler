@@ -44,7 +44,7 @@ const MonthPopupInner: FC<Props> = ({
       aria-label="날짜 선택 달력"
     >
       <div
-        className="w-full rounded-card bg-card p-4 shadow-elevated"
+        className="w-full max-w-[420px] rounded-card bg-card p-4 shadow-elevated"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-2 flex items-center">

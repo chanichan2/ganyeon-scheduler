@@ -10,34 +10,42 @@ interface Props {
 }
 
 /**
- * 주간 스트립 — 선택 날짜가 속한 주의 일~토 7칸 (칸 전체가 44px 이상 터치 타깃).
- * 요일/날짜 숫자 + 그날 연습 개수(tabular 캡션).
+ * 주간 스트립 — 선택 날짜가 속한 주의 일요일부터 시작.
+ * 모바일(<1024px)은 일~토 7칸, 아이패드 가로/PC(≥1024px)는 2주 14칸
+ * (칸 전체가 44px 이상 터치 타깃 유지).
+ * 요일/날짜 숫자 + 그날 갠연 예약 칸 수(tabular 캡션).
  * 선택일은 accent 채운 원(글자 흰색), 오늘은 accent 링.
  */
 const WeekStrip: FC<Props> = ({ selDate, today, countByDay, onSelect }) => {
   const start = startOfWeek(selDate)
+  const days = Array.from({ length: 14 }, (_, i) => addDays(start, i))
   return (
-    <div className="grid grid-cols-7 pb-2 pt-1">
-      {WEEKDAYS.map((wl, i) => {
-        const d = addDays(start, i)
+    <div className="grid grid-cols-7 pb-2 pt-1 lg:grid-cols-[repeat(14,minmax(0,1fr))]">
+      {days.map((d, i) => {
         const sel = isSameDay(d, selDate)
         const isToday = isSameDay(d, today)
         const cnt = countByDay.get(d.getTime()) ?? 0
         return (
           <button
-            key={i}
+            key={d.getTime()}
             type="button"
             onClick={() => onSelect(d)}
             aria-label={`${d.getMonth() + 1}월 ${d.getDate()}일`}
             aria-pressed={sel}
-            className="flex min-h-[44px] flex-col items-center gap-1 rounded-ctl py-1"
+            className={`min-h-[44px] flex-col items-center gap-1 rounded-ctl py-1 ${
+              i >= 7 ? 'hidden lg:flex' : 'flex'
+            }`}
           >
             <span
               className={`text-[11px] font-medium ${
-                i === 0 ? 'text-sun' : i === 6 ? 'text-sat' : 'text-mute'
+                d.getDay() === 0
+                  ? 'text-sun'
+                  : d.getDay() === 6
+                    ? 'text-sat'
+                    : 'text-mute'
               }`}
             >
-              {wl}
+              {WEEKDAYS[d.getDay()]}
             </span>
             <span
               className={`flex h-8 w-8 items-center justify-center rounded-full text-[15px] tabular-nums transition-colors ${

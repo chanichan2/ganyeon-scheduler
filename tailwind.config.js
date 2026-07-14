@@ -11,6 +11,9 @@
 
 /** @type {import('tailwindcss').Config} */
 export default {
+  // 모든 hover: 유틸리티를 @media (hover:hover) and (pointer:fine) 로 한정 —
+  // 아이패드에서 첫 탭이 hover 상태 전환으로 소모되는 문제를 원천 차단.
+  future: { hoverOnlyWhenSupported: true },
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {

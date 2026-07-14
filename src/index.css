@@ -124,6 +124,39 @@ body {
   animation: ssProgress 1.4s linear infinite;
 }
 
+/* 칸 hover 예약 미리보기 툴팁 — 정밀 포인터(마우스/트랙패드) 전용 장식.
+   터치 기기에서는 media 로 완전히 차단해 첫 탭이 hover 로 소모되지 않게 한다.
+   hover 로만 접근 가능한 정보가 아니어야 하므로 없어도 모든 기능이 동작. */
+.cell-tip {
+  display: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .cell-tip {
+    display: block;
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 20;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s var(--ease-std);
+    background: var(--ink);
+    color: #fff;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1;
+    padding: 6px 8px;
+    border-radius: 8px;
+    box-shadow: var(--sh-elevated);
+  }
+  button:hover > .cell-tip,
+  button:focus-visible > .cell-tip {
+    opacity: 1;
+  }
+}
+
 /* 유효 구간이 사라진(stale) 예약 칸 — 회색 빗금 오버레이 */
 .stale-hatch {
   background: repeating-linear-gradient(

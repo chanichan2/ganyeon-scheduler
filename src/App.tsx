@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fetchGanyeon, fetchSurvey } from './api'
 import { parseBookingKey } from './bookingKey'
 import { copyTextToClipboard } from './clipboard'
-import { isSameDay, startOfDay } from './dateUtils'
+import { addDays, isSameDay, startOfDay } from './dateUtils'
 import { buildGanyeonExportRows, buildTsv } from './export'
 import {
   buildScheduleModel,
@@ -215,6 +215,29 @@ function App() {
     setPickedDate(startOfDay(d))
   }, [])
 
+  // PC 키보드 단축키 — ←/→ 로 이전/다음 날짜. input 등 편집 요소 포커스 중이거나
+  // 월 달력 팝업이 열려 있으면 무시.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
+      if (monthOpen || e.defaultPrevented) return
+      const t = e.target
+      if (
+        t instanceof HTMLElement &&
+        (t.tagName === 'INPUT' ||
+          t.tagName === 'TEXTAREA' ||
+          t.tagName === 'SELECT' ||
+          t.isContentEditable)
+      ) {
+        return
+      }
+      e.preventDefault()
+      goto(addDays(selDate, e.key === 'ArrowLeft' ? -1 : 1))
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selDate, monthOpen, goto])
+
   // 관리자 로그인 — sonsesangscheduler 와 동일하게 비밀번호 프롬프트 + verify POST
   const adminLogin = useCallback(async () => {
     const pw = window.prompt('관리자 비밀번호를 입력하세요.')
@@ -277,7 +300,7 @@ function App() {
   const dayMembers = model && selDateKey ? model.days.get(selDateKey) : null
 
   return (
-    <div className="relative mx-auto flex h-[100dvh] max-w-[960px] flex-col overflow-hidden bg-paper shadow-standard">
+    <div className="relative mx-auto flex h-[100dvh] max-w-[1680px] flex-col overflow-hidden bg-paper shadow-standard">
       <Header
         selDate={selDate}
         today={today}
@@ -295,7 +318,7 @@ function App() {
         onExportTsv={() => void exportTsv()}
       />
 
-      <main className="flex-1 touch-pan-y overflow-y-auto overscroll-y-contain px-4 pb-12 pt-4 [-webkit-overflow-scrolling:touch]">
+      <main className="flex-1 touch-pan-y overflow-y-auto overscroll-y-contain px-4 pb-12 pt-4 [-webkit-overflow-scrolling:touch] md:px-6 lg:px-8">
         {error && !model && !fatal && (
           <ErrorView message={error.message} onRetry={() => void load()} />
         )}
@@ -345,7 +368,7 @@ function App() {
       {toast && (
         <div
           role="status"
-          className="absolute bottom-6 left-1/2 z-50 w-max max-w-[85%] -translate-x-1/2 rounded-ctl bg-ink px-4 py-3 text-[13px] font-medium leading-relaxed text-white shadow-elevated"
+          className="absolute bottom-6 left-1/2 z-50 w-max max-w-[85%] -translate-x-1/2 rounded-ctl bg-ink px-4 py-3 text-[13px] font-medium leading-relaxed text-white shadow-elevated lg:bottom-8 lg:left-auto lg:right-8 lg:max-w-[420px] lg:translate-x-0"
         >
           {toast}
         </div>

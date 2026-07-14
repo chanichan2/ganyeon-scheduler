@@ -28,9 +28,10 @@ const fmtClock = (d: Date) =>
   `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
 
 /**
- * 상단 헤더 — 브랜드 행(타이틀+갱신시각+새로고침+관리자/TSV 버튼),
- * 날짜 히어로(◀ 날짜 ▶ + 오늘), 주간 스트립. 날짜 히어로 탭 → 월 달력 팝업.
- * sonsesang2026 헤더에서 뷰 토글/이름 입력을 빼고 관리자 컨트롤을 넣은 형태.
+ * 상단 헤더 — 모바일(<1024px)은 브랜드 행 + 날짜 히어로 두 줄,
+ * 아이패드 가로/PC(≥1024px)는 [타이틀 | ◀ 날짜 ▶ 오늘 | 갱신시각·새로고침·
+ * 관리자/TSV] 한 줄 툴바로 정리. 아래에 주간 스트립(넓은 화면 14일).
+ * 날짜 히어로 탭 → 월 달력 팝업.
  */
 const Header: FC<Props> = ({
   selDate,
@@ -51,13 +52,13 @@ const Header: FC<Props> = ({
   const wd = selDate.getDay()
   const isToday = isSameDay(selDate, today)
   return (
-    <header className="relative z-10 bg-card px-4 pt-2 shadow-subtle">
-      {/* 브랜드 행 */}
-      <div className="flex items-center gap-2">
-        <h1 className="text-[15px] font-bold tracking-tight text-ink">
+    <header className="relative z-10 bg-card px-4 pt-2 shadow-subtle md:px-6 lg:px-8">
+      {/* 툴바 — 모바일: [브랜드|버튼] + 날짜 히어로 두 줄, ≥1024px: 한 줄 */}
+      <div className="flex flex-wrap items-center gap-x-2 lg:flex-nowrap lg:gap-x-4 lg:py-1">
+        <h1 className="order-1 text-[15px] font-bold tracking-tight text-ink">
           갠연 스케줄러
         </h1>
-        <div className="ml-auto flex items-center gap-1">
+        <div className="order-2 ml-auto flex items-center gap-1 lg:order-3 lg:ml-0">
           {updatedAt && (
             <span
               title="마지막 갱신 시각"
@@ -105,10 +106,9 @@ const Header: FC<Props> = ({
             </button>
           )}
         </div>
-      </div>
 
-      {/* 날짜 히어로 */}
-      <div className="flex items-center gap-1 pb-1 pt-2">
+        {/* 날짜 히어로 — 모바일 둘째 줄 전체 폭, ≥1024px 툴바 중앙 */}
+        <div className="order-3 flex w-full items-center gap-1 pb-1 pt-2 lg:order-2 lg:w-auto lg:min-w-0 lg:flex-1 lg:justify-center lg:pb-0 lg:pt-0">
         <button
           type="button"
           onClick={() => onGoto(addDays(selDate, -1))}
@@ -121,13 +121,13 @@ const Header: FC<Props> = ({
           type="button"
           onClick={onOpenMonth}
           aria-label="달력에서 날짜 선택"
-          className="flex min-w-0 flex-1 items-baseline justify-center gap-2"
+          className="flex min-w-0 flex-1 items-baseline justify-center gap-2 lg:flex-none"
         >
-          <span className="truncate text-[26px] font-bold leading-[1.3] tracking-[-0.02em] text-ink tabular-nums">
+          <span className="truncate text-[26px] font-bold leading-[1.3] tracking-[-0.02em] text-ink tabular-nums lg:text-[22px]">
             {selDate.getMonth() + 1}월 {selDate.getDate()}일
           </span>
           <span
-            className={`text-[17px] font-semibold ${
+            className={`text-[17px] font-semibold lg:text-[15px] ${
               wd === 0 ? 'text-sun' : wd === 6 ? 'text-sat' : 'text-body'
             }`}
           >
@@ -153,6 +153,7 @@ const Header: FC<Props> = ({
         >
           <ChevronRightIcon className="h-4 w-4" />
         </button>
+        </div>
       </div>
 
       <WeekStrip
