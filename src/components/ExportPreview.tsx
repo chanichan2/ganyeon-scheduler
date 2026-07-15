@@ -8,7 +8,7 @@ import {
   type ExportBoundary,
   type ExportComputation,
 } from '../export'
-import { boundaryMapKey, type BoundaryState } from '../overrides'
+import { type BoundaryState } from '../overrides'
 import { fmtHM } from '../ranges'
 import type { ScheduleModel } from '../model'
 import { LinkIcon, ScissorsIcon } from './icons'
