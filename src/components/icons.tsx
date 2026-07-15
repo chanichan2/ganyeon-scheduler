@@ -88,6 +88,43 @@ export const PersonIcon: FC<IconProps> = ({ className }) => (
   </svg>
 )
 
+/** 사슬(연결) — 경계 스위치 join 상태. */
+export const LinkIcon: FC<IconProps> = ({ className }) => (
+  <svg
+    aria-hidden="true"
+    viewBox="0 0 24 24"
+    className={className}
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+  </svg>
+)
+
+/** 가위(절단) — 경계 스위치 cut 상태. */
+export const ScissorsIcon: FC<IconProps> = ({ className }) => (
+  <svg
+    aria-hidden="true"
+    viewBox="0 0 24 24"
+    className={className}
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2.2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  >
+    <circle cx="6" cy="6" r="3" />
+    <path d="M8.12 8.12 12 12" />
+    <path d="M20 4 8.12 15.88" />
+    <circle cx="6" cy="18" r="3" />
+    <path d="M14.8 14.8 20 20" />
+  </svg>
+)
+
 /** 새로고침. */
 export const RefreshIcon: FC<IconProps> = ({ className }) => (
   <svg

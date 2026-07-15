@@ -89,6 +89,8 @@ export type WarningKind =
   | 'stale-booking'
   /** 7. 같은 부원의 팀연습끼리 겹침 등 데이터 이상 */
   | 'team-overlap'
+  /** 8. 경계 스위치 override key 형식 오류/cut·join 충돌 */
+  | 'boundary-override'
 
 export interface AppWarning {
   kind: WarningKind

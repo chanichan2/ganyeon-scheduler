@@ -1,18 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fetchGanyeon, fetchSurvey } from './api'
 import { parseBookingKey } from './bookingKey'
-import { copyTextToClipboard } from './clipboard'
 import { addDays, isSameDay, startOfDay } from './dateUtils'
-import { buildGanyeonExportRows, buildTsv } from './export'
+import type { ExportBoundary } from './export'
 import {
   buildScheduleModel,
   computeBookingIssues,
   cumulativeMinutesByMember,
   type ScheduleModel,
 } from './model'
+import {
+  boundaryResetOps,
+  boundaryToggleOps,
+  splitServerKeys,
+} from './overrides'
 import { buildSongColorMap } from './songColors'
 import { useAdmin } from './useAdmin'
 import { useBookings } from './useBookings'
+import ExportPreview from './components/ExportPreview'
 import Header from './components/Header'
 import MemberGrid from './components/MemberGrid'
 import MonthPopup from './components/MonthPopup'
@@ -23,7 +28,6 @@ import type { GanyeonPayload, SurveyPayload } from './types'
 const POLL_MS = 5 * 60 * 1000
 /** 오늘 판정 갱신 주기 — 30초. */
 const TICK_MS = 30 * 1000
-const EXPORT_LABEL_DEFAULT = '갠연 TSV 복사'
 
 interface AppError {
   message: string
@@ -54,6 +58,7 @@ function App() {
   /** 사용자가 고른 날짜 — null 이면 자동(오늘, 기간 밖이면 첫 조사일). */
   const [pickedDate, setPickedDate] = useState<Date | null>(null)
   const [monthOpen, setMonthOpen] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
 
   // 토스트 (예약 저장 실패/안내)
   const [toast, setToast] = useState<string | null>(null)
@@ -72,12 +77,22 @@ function App() {
       '관리자 인증이 만료되었거나 비밀번호가 변경되었어요. 다시 로그인해 주세요.',
     )
   }, [admin, showToast])
-  const { bookings, syncFromServer, toggle } = useBookings({
+  const {
+    bookings: serverKeys,
+    syncFromServer,
+    toggle,
+    applyKeyOps,
+  } = useBookings({
     apiUrl: ganyeonUrl,
     tokenRef: admin.tokenRef,
     onError: showToast,
     onUnauthorized: handleUnauthorized,
   })
+
+  // 서버 key 배열 → 예약 key / 경계 override 분리.
+  // boundary| key 는 예약 파싱·경고 패널·화면 어디에도 흘러들지 않는다.
+  const keySplit = useMemo(() => splitServerKeys(serverKeys), [serverKeys])
+  const bookings = keySplit.bookings
 
   useEffect(() => {
     const id = window.setInterval(() => setNow(new Date()), TICK_MS)
@@ -174,8 +189,11 @@ function App() {
     [model, bookings],
   )
   const allWarnings = useMemo(
-    () => (model ? [...model.warnings, ...bookingIssues.warnings] : []),
-    [model, bookingIssues],
+    () =>
+      model
+        ? [...model.warnings, ...bookingIssues.warnings, ...keySplit.warnings]
+        : [],
+    [model, bookingIssues, keySplit],
   )
 
   /** 곡 → 원색 hex (팀연습 오버레이). 갠연은 곡 색 배정에서 제외(인디고 전용). */
@@ -220,7 +238,7 @@ function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return
-      if (monthOpen || e.defaultPrevented) return
+      if (monthOpen || exportOpen || e.defaultPrevented) return
       const t = e.target
       if (
         t instanceof HTMLElement &&
@@ -236,7 +254,7 @@ function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [selDate, monthOpen, goto])
+  }, [selDate, monthOpen, exportOpen, goto])
 
   // 관리자 로그인 — sonsesangscheduler 와 동일하게 비밀번호 프롬프트 + verify POST
   const adminLogin = useCallback(async () => {
@@ -255,47 +273,32 @@ function App() {
     [admin.isAdmin, toggle],
   )
 
-  // TSV 내보내기 (관리자 전용, 클립보드 복사)
-  const [exportLabel, setExportLabel] = useState(EXPORT_LABEL_DEFAULT)
-  const [exportBusy, setExportBusy] = useState(false)
-  const exportTsv = useCallback(async () => {
+  // TSV 내보내기 미리보기 (관리자 전용) — 복사는 모달 안에서.
+  const openExport = useCallback(() => {
     if (!admin.isAdmin || !model) return
     if (bookings.size === 0) {
       showToast('내보낼 갠연 예약이 없어요. 칸을 클릭해 먼저 예약해 주세요.')
       return
     }
-    const { rows, skipped } = buildGanyeonExportRows(bookings, {
-      dateKeys: model.dateKeys,
-      startHour: model.startHour,
-      endHour: model.endHour,
-      roster: model.rosterSet,
-      availOf: model.availOf,
-      teamRangesOf: model.teamRangesOf,
-    })
-    if (rows.length === 0) {
-      showToast(
-        `내보낼 수 있는 예약이 없어요 (현재 데이터와 맞지 않는 예약 ${skipped}건 — 경고 패널 참고).`,
-      )
-      return
-    }
-    const tsv = buildTsv(rows, model.startDate)
-    const ok = await copyTextToClipboard(tsv)
-    if (!ok) {
-      showToast('클립보드 복사에 실패했어요. 브라우저 권한을 확인해 주세요.')
-      return
-    }
-    if (skipped > 0) {
-      showToast(
-        `현재 데이터와 매칭되지 않아 제외된 예약 ${skipped}건이 있어요 (경고 패널 참고).`,
-      )
-    }
-    setExportLabel(`복사 완료 ✓ ${rows.length}행`)
-    setExportBusy(true)
-    window.setTimeout(() => {
-      setExportLabel(EXPORT_LABEL_DEFAULT)
-      setExportBusy(false)
-    }, 2000)
+    setExportOpen(true)
   }, [admin.isAdmin, model, bookings, showToast])
+
+  // 경계 스위치 토글/초기화 — 서버 op 계산은 순수 함수(overrides.ts),
+  // 낙관적 반영 + 직렬 POST + 실패 롤백은 useBookings 가 담당.
+  const onToggleBoundary = useCallback(
+    (b: ExportBoundary) => {
+      applyKeyOps(
+        boundaryToggleOps(serverKeys, b.dateKey, b.hour, b.auto, b.effective),
+      )
+    },
+    [applyKeyOps, serverKeys],
+  )
+  const onResetDate = useCallback(
+    (dateKey: string) => {
+      applyKeyOps(boundaryResetOps(serverKeys, dateKey))
+    },
+    [applyKeyOps, serverKeys],
+  )
 
   const dayMembers = model && selDateKey ? model.days.get(selDateKey) : null
 
@@ -308,14 +311,12 @@ function App() {
         loading={loading}
         updatedAt={updatedAt}
         isAdmin={admin.isAdmin}
-        exportLabel={exportLabel}
-        exportBusy={exportBusy}
         onGoto={goto}
         onRefresh={load}
         onOpenMonth={() => setMonthOpen(true)}
         onAdminLogin={() => void adminLogin()}
         onAdminLogout={admin.logout}
-        onExportTsv={() => void exportTsv()}
+        onOpenExport={openExport}
       />
 
       <main className="flex-1 touch-pan-y overflow-y-auto overscroll-y-contain px-4 pb-12 pt-4 [-webkit-overflow-scrolling:touch] md:px-6 lg:px-8">
@@ -364,6 +365,19 @@ function App() {
           </div>
         )}
       </main>
+
+      {model && (
+        <ExportPreview
+          open={exportOpen}
+          model={model}
+          bookings={bookings}
+          overrides={keySplit.overrides}
+          onToggleBoundary={onToggleBoundary}
+          onResetDate={onResetDate}
+          onToast={showToast}
+          onClose={() => setExportOpen(false)}
+        />
+      )}
 
       {toast && (
         <div

@@ -2,7 +2,7 @@
  * App 스모크 테스트 — 두 API 를 목킹해 실제 payload 형태로 렌더링이
  * 끝까지 되는지(부원표/팀연습 바/누적 시간/경고 패널) 확인.
  */
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 
@@ -31,7 +31,8 @@ const ganyeonPayload = {
     ['날짜', '시작', '종료', '곡명', '연습실', '참여부원'],
     ['2026. 8. 1', '16:45', '18', '곡A', '', '민재'],
   ],
-  bookings: ['8/1|13|민재'],
+  // boundary| key(stale override)는 예약 파싱/경고 패널을 오염시키면 안 됨
+  bookings: ['8/1|13|민재', 'boundary|8/1|20|cut'],
 }
 
 function jsonResponse(body: unknown): Response {
@@ -81,8 +82,9 @@ describe('App — 로드/렌더 스모크', () => {
     // 지수 8/1 = X(미정) → 이름 열 미정 배지
     expect(screen.getByText('미정')).toBeInTheDocument()
 
-    // "이상한값" 파싱 실패 → 경고 패널 노출 (조용한 누락 금지)
-    expect(screen.getByText(/확인이 필요한 항목/)).toBeInTheDocument()
+    // "이상한값" 파싱 실패 → 경고 패널 노출 (조용한 누락 금지).
+    // boundary| key 는 경고를 만들지 않으므로 정확히 1건이어야 한다.
+    expect(screen.getByText(/확인이 필요한 항목 1건/)).toBeInTheDocument()
 
     // 비관리자 — 모든 칸 클릭 버튼은 비활성
     const cell = screen.getByRole('button', {
@@ -96,7 +98,32 @@ describe('App — 로드/렌더 스모크', () => {
     await waitFor(() => {
       expect(screen.getByText('민재')).toBeInTheDocument()
     })
-    expect(screen.queryByText('갠연 TSV 복사')).not.toBeInTheDocument()
+    expect(screen.queryByText('TSV 내보내기')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: '관리자' })).toBeInTheDocument()
+  })
+
+  it('관리자 세션 복원 → TSV 내보내기 미리보기 모달 (같은 계산 함수 공유)', async () => {
+    // localStorage 토큰 → verify POST(목킹은 ok:true 반환) → 관리자 자동 복원
+    localStorage.setItem('ganyeon_admin_token', 'pw')
+    render(<App />)
+    const exportBtn = await screen.findByRole('button', {
+      name: 'TSV 내보내기',
+    })
+    fireEvent.click(exportBtn)
+
+    const dialog = await screen.findByRole('dialog', {
+      name: /TSV 내보내기 미리보기/,
+    })
+    // 예약 8/1|13|민재 (가용 ~14:30, 13~14 칸 전체 유효) → 한 행
+    expect(within(dialog).getByText('복사될 내용 (1행)')).toBeInTheDocument()
+    expect(within(dialog).getByText('2026. 8. 1')).toBeInTheDocument()
+    const row = within(dialog).getByText('2026. 8. 1').closest('tr')!
+    expect(row.textContent).toContain('갠연')
+    expect(row.textContent).toContain('민재')
+    // 닫기
+    fireEvent.click(within(dialog).getByRole('button', { name: '닫기' }))
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
   })
 })

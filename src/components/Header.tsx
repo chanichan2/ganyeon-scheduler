@@ -12,15 +12,13 @@ interface Props {
   /** 마지막 성공 갱신 시각 — 아직 없으면 null. */
   updatedAt: Date | null
   isAdmin: boolean
-  /** TSV 복사 버튼 라벨 (복사 완료 피드백 포함). */
-  exportLabel: string
-  exportBusy: boolean
   onGoto: (d: Date) => void
   onRefresh: () => void
   onOpenMonth: () => void
   onAdminLogin: () => void
   onAdminLogout: () => void
-  onExportTsv: () => void
+  /** TSV 내보내기 미리보기 모달 열기 (관리자 전용). */
+  onOpenExport: () => void
 }
 
 /** "14:05" — 갱신시각 캡션. */
@@ -40,14 +38,12 @@ const Header: FC<Props> = ({
   loading,
   updatedAt,
   isAdmin,
-  exportLabel,
-  exportBusy,
   onGoto,
   onRefresh,
   onOpenMonth,
   onAdminLogin,
   onAdminLogout,
-  onExportTsv,
+  onOpenExport,
 }) => {
   const wd = selDate.getDay()
   const isToday = isSameDay(selDate, today)
@@ -82,11 +78,10 @@ const Header: FC<Props> = ({
             <>
               <button
                 type="button"
-                onClick={onExportTsv}
-                disabled={exportBusy}
-                className="h-9 rounded-full bg-accent px-3.5 text-[13px] font-semibold text-white transition hover:bg-accent-deep active:scale-95 disabled:opacity-60"
+                onClick={onOpenExport}
+                className="h-9 rounded-full bg-accent px-3.5 text-[13px] font-semibold text-white transition hover:bg-accent-deep active:scale-95"
               >
-                {exportLabel}
+                TSV 내보내기
               </button>
               <button
                 type="button"

@@ -11,6 +11,7 @@ const KIND_LABEL: Record<WarningKind, string> = {
   'ganyeon-row': '연습일정 탭의 갠연 행 (이중 카운트 위험)',
   'stale-booking': '유효 구간이 사라진 예약',
   'team-overlap': '팀연습 겹침 등 데이터 이상',
+  'boundary-override': '경계 스위치 데이터 이상 (충돌/형식 오류)',
 }
 
 const KIND_ORDER: WarningKind[] = [
@@ -21,6 +22,7 @@ const KIND_ORDER: WarningKind[] = [
   'ganyeon-row',
   'stale-booking',
   'team-overlap',
+  'boundary-override',
 ]
 
 interface Props {
