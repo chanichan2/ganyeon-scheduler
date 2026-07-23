@@ -11,9 +11,6 @@
 import { clipRanges, mergeRanges, subtractRange, totalMinutes, formatTime } from './ranges'
 import type { MinRange } from './types'
 
-/** 칸의 유효 구간 합계가 이 값(분) 미만이면 클릭 자체를 막는다. 조각별이 아니라 합계 기준. */
-export const MIN_BOOKABLE_MIN = 30
-
 export interface EffectiveCell {
   /** 유효 구간 조각들 (병합·정렬 완료). */
   slices: MinRange[]

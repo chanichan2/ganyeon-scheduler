@@ -9,7 +9,8 @@
  *  - 곡명: 항상 정확히 "갠연" / 연습실: 빈 문자열
  *
  * 행 병합 — "실제 겹침" 기반:
- *  - run: 날짜별 (모든 부원의) 예약 칸 합집합에서 연속된 1시간 칸 묶음.
+ *  - run: 날짜별 (모든 부원의) 유효 구간이 있는 예약 칸 합집합에서 연속된
+ *    1시간 칸 묶음. 죽은(유효 0분) 예약 칸은 run 을 연장하지 않는다.
  *  - 경계: run 내부의 정각 시각 (run 시작/끝 제외).
  *  - 경계 자동 기본값: 어떤 부원의 유효 slice [a,b) 가 경계를 엄격히
  *    가로지르면(a < h*60 < b) 연결(join), 아무도 없으면 절단(cut).
@@ -83,7 +84,7 @@ export interface ExportComputation {
  * slices 가 블록 전체를 정확히 덮으면 이름만, 아니면 괄호 메모:
  * 블록 시작과 같으면 시작 생략("~14:30"), 블록 끝과 같으면 끝 생략("15~"),
  * 둘 다 다르면 "14:30~15:30", 복수 조각은 콤마. 미정이면 메모 끝에 "미정".
- * 합계 30분 미만이면 null (참여 불가).
+ * 블록 안 유효 구간이 전혀 없으면(0분) null — 1분이라도 있으면 포함.
  */
 export function exportMemberEntry(
   name: string,
@@ -102,7 +103,7 @@ export function exportMemberEntry(
       slices.push([is, ie])
     }
   }
-  if (total < 30) return null
+  if (total <= 0) return null
   const fullCoverage =
     slices.length === 1 &&
     slices[0][0] === blockStart &&
@@ -183,8 +184,11 @@ export function buildGanyeonExport(
   const boundaries: ExportBoundary[] = []
 
   for (const [dateKey, memberMap] of byDate) {
-    // 부원의 유효 slices = 클릭한 각 칸의 유효 구간(칸 ∩ 가용 − 팀연습) 합집합
+    // 부원의 유효 slices = 클릭한 각 칸의 유효 구간(칸 ∩ 가용 − 팀연습) 합집합.
+    // liveHours = 유효 구간이 1분이라도 있는 예약 칸의 합집합 — 죽은(0분) 칸이
+    // run 을 연장해 존재하지 않는 블록 경계를 만들지 않게 run 계산에서 제외한다.
     const slicesByMember = new Map<string, MinRange[]>()
+    const liveHours = new Set<number>()
     for (const [member, hours] of memberMap) {
       const avail = ctx.availOf(member, dateKey)
       const teamRanges = ctx.teamRangesOf(member, dateKey)
@@ -196,21 +200,21 @@ export function buildGanyeonExport(
           avail.ranges,
           teamRanges,
         )
+        if (slices.length > 0) liveHours.add(h)
         pieces.push(...slices)
       }
       slicesByMember.set(member, mergeRanges(pieces))
     }
 
-    // 모든 부원의 예약 칸 합집합 → 연속 run
-    const allHours = [...new Set([...memberMap.values()].flatMap((s) => [...s]))]
-      .sort((a, b) => a - b)
+    // 유효 구간이 있는 예약 칸 합집합 → 연속 run
+    const allHours = [...liveHours].sort((a, b) => a - b)
     const runs: Array<[number, number]> = []
     for (const h of allHours) {
       const last = runs[runs.length - 1]
       if (last && h === last[1]) last[1] = h + 1
       else runs.push([h, h + 1])
     }
-    runsByDate.set(dateKey, runs)
+    if (runs.length > 0) runsByDate.set(dateKey, runs)
 
     for (const [h0, h1] of runs) {
       // run 내부 경계의 유효 상태 → 절단 지점

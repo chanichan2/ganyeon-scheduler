@@ -1,13 +1,14 @@
 import { useState, type FC } from 'react'
 import { isSameDay, WEEKDAYS } from '../dateUtils'
+import { formatDurationShort } from '../ranges'
 import { ChevronLeftIcon, ChevronRightIcon } from './icons'
 
 interface Props {
   open: boolean
   selDate: Date
   today: Date
-  /** 자정 ms → 그날 연습 개수 (tabular 캡션 표시용). */
-  countByDay: Map<number, number>
+  /** 자정 ms → 그날 유효 갠연 분 합계 (tabular 캡션 표시용). */
+  minutesByDay: Map<number, number>
   onSelect: (d: Date) => void
   onClose: () => void
 }
@@ -26,7 +27,7 @@ const MonthPopup: FC<Props> = (props) => {
 const MonthPopupInner: FC<Props> = ({
   selDate,
   today,
-  countByDay,
+  minutesByDay,
   onSelect,
   onClose,
 }) => {
@@ -83,7 +84,7 @@ const MonthPopupInner: FC<Props> = ({
           {cells.map(({ date, inMonth }) => {
             const sel = isSameDay(date, selDate)
             const isToday = isSameDay(date, today)
-            const cnt = countByDay.get(date.getTime()) ?? 0
+            const min = minutesByDay.get(date.getTime()) ?? 0
             return (
               <button
                 key={date.getTime()}
@@ -110,7 +111,7 @@ const MonthPopupInner: FC<Props> = ({
                     sel ? 'text-accent' : 'text-mute'
                   }`}
                 >
-                  {cnt > 0 ? cnt : ''}
+                  {min > 0 ? formatDurationShort(min) : ''}
                 </span>
               </button>
             )

@@ -31,9 +31,9 @@ describe('splitServerKeys — 서버 key 분리', () => {
       { ok: true, teamRows: [], bookings: [] },
     )
     const split = splitServerKeys(['8/1|13|민재', 'boundary|8/1|14|cut'])
-    const { warnings, staleKeys } = computeBookingIssues(model, split.bookings)
+    const { warnings, deadKeys } = computeBookingIssues(model, split.bookings)
     expect(warnings).toEqual([])
-    expect(staleKeys.size).toBe(0)
+    expect(deadKeys.size).toBe(0)
   })
 
   it('수용9: 같은 경계에 cut/join 동시 존재 → cut 우선 + boundary-override 경고', () => {

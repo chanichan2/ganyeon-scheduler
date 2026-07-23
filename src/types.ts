@@ -85,7 +85,7 @@ export type WarningKind =
   | 'date-out-of-range'
   /** 5. 연습일정 탭에 곡명 "갠연" 행 존재 (이중 카운트 위험) */
   | 'ganyeon-row'
-  /** 6. 유효 구간이 사라졌거나 30분 미만이 된 기존 예약 */
+  /** 6. 유효 구간이 사라진(0분, 죽은) 기존 예약 / 매칭 실패 예약 */
   | 'stale-booking'
   /** 7. 같은 부원의 팀연습끼리 겹침 등 데이터 이상 */
   | 'team-overlap'

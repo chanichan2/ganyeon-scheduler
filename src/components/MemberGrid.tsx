@@ -1,7 +1,6 @@
 import type { CSSProperties, FC, ReactNode } from 'react'
 import { bookingKey } from '../bookingKey'
 import { duo } from '../duotone'
-import { MIN_BOOKABLE_MIN } from '../effective'
 import { formatDuration, formatTime, fmtHM } from '../ranges'
 import { songColor } from '../songColors'
 import type { MemberDay } from '../model'
@@ -21,8 +20,8 @@ interface Props {
   dateKey: string
   memberDays: MemberDay[]
   bookings: Set<string>
-  /** 유효 구간이 30분 미만이 된 예약 key — 회색 처리. */
-  staleKeys: Set<string>
+  /** 죽은 예약 key — 유효 구간이 0분. 회색 빗금 처리, 클릭해 제거만 가능. */
+  deadKeys: Set<string>
   /** 부원 → 전체 기간 누적 갠연 시간 (분). */
   cumMinutes: Map<string, number>
   isAdmin: boolean
@@ -54,7 +53,7 @@ const MemberGrid: FC<Props> = ({
   dateKey,
   memberDays,
   bookings,
-  staleKeys,
+  deadKeys,
   cumMinutes,
   isAdmin,
   songColors,
@@ -179,7 +178,7 @@ const MemberGrid: FC<Props> = ({
                     {/* 3. 갠연 인디고 채움 — 유효 구간(흰색이었던 부분)에만 */}
                     {md.cells.map((cell) => {
                       const key = bookingKey(dateKey, cell.hour, md.name)
-                      if (!bookings.has(key) || staleKeys.has(key)) return null
+                      if (!bookings.has(key) || deadKeys.has(key)) return null
                       return cell.slices.map(([s, e], i) => (
                         <div
                           key={`gy-${cell.hour}-${i}`}
@@ -222,14 +221,14 @@ const MemberGrid: FC<Props> = ({
                     {md.cells.map((cell) => {
                       const key = bookingKey(dateKey, cell.hour, md.name)
                       const booked = bookings.has(key)
-                      const stale = booked && staleKeys.has(key)
-                      const bookable = cell.total >= MIN_BOOKABLE_MIN
-                      // 잡힌 칸은 언제나 클릭해 제거 가능 (stale 정리 경로)
+                      const dead = booked && deadKeys.has(key)
+                      const bookable = cell.total > 0
+                      // 잡힌 칸은 언제나 클릭해 제거 가능 (죽은 예약 정리 경로)
                       const clickable = isAdmin && (booked || bookable)
                       const label =
                         `${md.name} ${cell.hour}시 칸` +
                         (booked
-                          ? stale
+                          ? dead
                             ? ' — 예약됨(유효 구간 소멸), 클릭해 제거'
                             : ' — 갠연 예약됨'
                           : bookable
@@ -255,7 +254,7 @@ const MemberGrid: FC<Props> = ({
                           aria-pressed={booked}
                           className={`absolute inset-y-0 z-[6] ${
                             booked
-                              ? stale
+                              ? dead
                                 ? 'stale-hatch ring-2 ring-inset ring-line-strong'
                                 : 'bg-accent/10 ring-2 ring-inset ring-accent'
                               : ''
@@ -273,7 +272,7 @@ const MemberGrid: FC<Props> = ({
                           {clickable && (
                             <span className="cell-tip" aria-hidden>
                               {booked
-                                ? stale
+                                ? dead
                                   ? '클릭 시 제거'
                                   : '클릭 시 취소'
                                 : `클릭 시 ${slicesText} 예약`}
@@ -292,7 +291,7 @@ const MemberGrid: FC<Props> = ({
       <p className="mt-2 px-1.5 text-[11px] font-medium leading-relaxed text-faint">
         흰색 = 가능 · 어두움 = 불가 · 색 막대 = 팀연습 · 인디고 = 갠연
         {isAdmin
-          ? ' — 칸을 클릭해 예약/취소 (유효 30분 미만은 클릭 불가)'
+          ? ' — 칸을 클릭해 예약/취소 (유효 시간이 없는 칸은 클릭 불가)'
           : ' — 예약 변경은 관리자 모드에서만 가능해요'}
       </p>
     </>

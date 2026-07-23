@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fetchGanyeon, fetchSurvey } from './api'
-import { parseBookingKey } from './bookingKey'
 import { addDays, isSameDay, startOfDay } from './dateUtils'
 import type { ExportBoundary } from './export'
 import {
   buildScheduleModel,
   computeBookingIssues,
+  cumulativeMinutesByDate,
   cumulativeMinutesByMember,
   type ScheduleModel,
 } from './model'
@@ -82,6 +82,8 @@ function App() {
     syncFromServer,
     toggle,
     applyKeyOps,
+    hasPendingOps,
+    getMutationSeq,
   } = useBookings({
     apiUrl: ganyeonUrl,
     tokenRef: admin.tokenRef,
@@ -112,6 +114,9 @@ function App() {
     }
     inFlight.current = true
     setLoading(true)
+    // 이 GET 이 시작된 시점의 변경 세대 — 응답이 도착했을 때 세대가 달라졌으면
+    // (그 사이 사용자가 예약을 변경했으면) 낡은 스냅샷이므로 sync 를 건너뛴다.
+    const seqAtStart = getMutationSeq()
     try {
       const [surveyData, ganyeonData] = await Promise.all([
         fetchSurvey(surveyUrl),
@@ -119,7 +124,7 @@ function App() {
       ])
       setSurvey(surveyData)
       setGanyeon(ganyeonData)
-      syncFromServer(ganyeonData.bookings ?? [])
+      syncFromServer(ganyeonData.bookings ?? [], seqAtStart)
       setError(null)
       setUpdatedAt(new Date())
     } catch (e) {
@@ -133,7 +138,7 @@ function App() {
       inFlight.current = false
       setLoading(false)
     }
-  }, [surveyUrl, ganyeonUrl, syncFromServer])
+  }, [surveyUrl, ganyeonUrl, syncFromServer, getMutationSeq])
 
   useEffect(() => {
     const runLoad = () => {
@@ -180,7 +185,7 @@ function App() {
     () =>
       model
         ? computeBookingIssues(model, bookings)
-        : { warnings: [], staleKeys: new Set<string>() },
+        : { warnings: [], deadKeys: new Set<string>() },
     [model, bookings],
   )
   const cumMinutes = useMemo(
@@ -206,16 +211,14 @@ function App() {
     return buildSongColorMap(songs)
   }, [model])
 
-  /** 자정 ms → 그날 갠연 예약 칸 수 (주간 스트립/월 달력 캡션). */
-  const countByDay = useMemo(() => {
+  /** 자정 ms → 그날 유효 갠연 분 합계 (주간 스트립/월 달력 캡션).
+   *  예약 칸 수가 아니라 유효 분 기준 — 부원표/누적 시간과 항상 같은 의미. */
+  const minutesByDay = useMemo(() => {
     const m = new Map<number, number>()
     if (!model) return m
-    for (const key of bookings) {
-      const ref = parseBookingKey(key)
-      if (!ref) continue
-      const d = model.dateByKey.get(ref.dateKey)
-      if (!d) continue
-      m.set(d.getTime(), (m.get(d.getTime()) ?? 0) + 1)
+    for (const [dateKey, min] of cumulativeMinutesByDate(model, bookings)) {
+      const d = model.dateByKey.get(dateKey)
+      if (d) m.set(d.getTime(), min)
     }
     return m
   }, [model, bookings])
@@ -274,14 +277,19 @@ function App() {
   )
 
   // TSV 내보내기 미리보기 (관리자 전용) — 복사는 모달 안에서.
+  // 미확정 POST 가 남아 있으면 열지 않는다 — 화면과 서버가 아직 다를 수 있다.
   const openExport = useCallback(() => {
     if (!admin.isAdmin || !model) return
+    if (hasPendingOps()) {
+      showToast('저장 중인 변경이 있어요. 잠시 후 다시 시도해 주세요.')
+      return
+    }
     if (bookings.size === 0) {
       showToast('내보낼 갠연 예약이 없어요. 칸을 클릭해 먼저 예약해 주세요.')
       return
     }
     setExportOpen(true)
-  }, [admin.isAdmin, model, bookings, showToast])
+  }, [admin.isAdmin, model, hasPendingOps, bookings, showToast])
 
   // 경계 스위치 토글/초기화 — 서버 op 계산은 순수 함수(overrides.ts),
   // 낙관적 반영 + 직렬 POST + 실패 롤백은 useBookings 가 담당.
@@ -307,7 +315,7 @@ function App() {
       <Header
         selDate={selDate}
         today={today}
-        countByDay={countByDay}
+        minutesByDay={minutesByDay}
         loading={loading}
         updatedAt={updatedAt}
         isAdmin={admin.isAdmin}
@@ -349,7 +357,7 @@ function App() {
                 dateKey={selDateKey}
                 memberDays={dayMembers}
                 bookings={bookings}
-                staleKeys={bookingIssues.staleKeys}
+                deadKeys={bookingIssues.deadKeys}
                 cumMinutes={cumMinutes}
                 isAdmin={admin.isAdmin}
                 songColors={songColorMap}
@@ -372,6 +380,7 @@ function App() {
           model={model}
           bookings={bookings}
           overrides={keySplit.overrides}
+          hasPendingOps={hasPendingOps}
           onToggleBoundary={onToggleBoundary}
           onResetDate={onResetDate}
           onToast={showToast}
@@ -392,7 +401,7 @@ function App() {
         open={monthOpen}
         selDate={selDate}
         today={today}
-        countByDay={countByDay}
+        minutesByDay={minutesByDay}
         onSelect={(d) => {
           goto(d)
           setMonthOpen(false)

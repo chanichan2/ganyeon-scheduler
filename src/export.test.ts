@@ -143,18 +143,16 @@ describe('TSV 내보내기 — 수용 기준 (겹침 기반 병합)', () => {
     )
   })
 
-  it('수용4: 클리핑 경계 — 가용 ~12:30 이면 13 경계는 절단, 빈 블록은 행 없음', () => {
+  it('수용4: 클리핑 경계 — 가용 ~12:30 이면 13시 칸은 죽은(0분) 칸이라 run 에서 제외', () => {
     const ctx = makeCtx({ 민재: { '8/1': '~12:30' } })
     const { rows, boundaries } = buildGanyeonExport(
       ['8/1|12|민재', '8/1|13|민재'],
       NO_OVERRIDE,
       ctx,
     )
-    // 클릭 칸이 경계 양쪽에 있어도 slice(12:00~12:30)가 안 가로지르면 절단
-    expect(
-      boundaries.map((b) => [b.hour, b.auto, b.effective]),
-    ).toEqual([[13, 'cut', 'cut']])
-    // 13~14 블록은 유효 slices 있는 부원이 없어 행 자체가 생성되지 않음
+    // 13시 칸은 유효 구간이 없으므로 run 을 연장하지 않는다 → run 은 12~13 하나,
+    // 내부 경계 자체가 없다 (죽은 칸이 만들던 가짜 13 경계 제거)
+    expect(boundaries).toEqual([])
     expect(buildTsv(rows, START_DATE)).toBe(
       '2026. 8. 1\t12\t13\t갠연\t\t민재(~12:30)',
     )
@@ -270,14 +268,14 @@ describe('TSV 내보내기 — 미정/정렬/제외', () => {
     expect(rows[0].membersStr).toBe('지수(미정)')
   })
 
-  it('부분 가용 + 미정 — 15 경계 절단 후 15~16 행에 지수(미정)', () => {
+  it('부분 가용 + 미정 — 14시 칸은 죽은(0분) 칸이라 15~16 행만 생성', () => {
     const ctx = makeCtx({ 지수: { '8/1': '15~(미정)' } })
     const { rows } = buildGanyeonExport(
       ['8/1|14|지수', '8/1|15|지수'],
       NO_OVERRIDE,
       ctx,
     )
-    // 14~15 칸의 유효 slice 가 없으므로 15 경계는 절단 → 14~15 블록은 행 없음
+    // 14시 칸은 유효 slice 가 없어 run 에서 제외 → 15~16 run 하나만
     expect(rows).toHaveLength(1)
     expect(rows[0].startHour).toBe(15)
     expect(rows[0].endHour).toBe(16)
@@ -325,10 +323,55 @@ describe('TSV 내보내기 — 미정/정렬/제외', () => {
     expect(skipped).toBe(4)
   })
 
-  it('유효 구간이 30분 미만이 된 예약만 있는 블록은 행을 만들지 않음', () => {
+  it('유효 구간이 짧아도(10분) 행에 포함 — 1분 규칙', () => {
     const ctx = makeCtx({ 민재: { '8/1': '~13:10' } })
     const { rows } = buildGanyeonExport(['8/1|13|민재'], NO_OVERRIDE, ctx)
+    expect(buildTsv(rows, START_DATE)).toBe(
+      '2026. 8. 1\t13\t14\t갠연\t\t민재(~13:10)',
+    )
+  })
+
+  it('유효 구간 0분(죽은) 예약만 있는 날짜는 run/행이 만들어지지 않음', () => {
+    const ctx = makeCtx({ 민재: { '8/1': 'X' } })
+    const { rows, runs, boundaries } = buildGanyeonExport(
+      ['8/1|13|민재'],
+      NO_OVERRIDE,
+      ctx,
+    )
     expect(rows).toHaveLength(0)
+    expect(runs.has('8/1')).toBe(false)
+    expect(boundaries).toEqual([])
+  })
+
+  it('죽은(0분) 예약이 오전/오후 run 사이를 이어붙이지 않음 — 경계 스위치도 없음', () => {
+    // 민재: 팀연습 13~14 가 13시 칸을 전부 덮음 → 13시 예약은 죽은 칸
+    const ctx = makeCtx(
+      { 민재: { '8/2': 'O' } },
+      { 민재: { '8/2': [[13 * 60, 14 * 60]] } },
+    )
+    const bookings = [
+      '8/2|10|민재',
+      '8/2|11|민재',
+      '8/2|12|민재',
+      '8/2|13|민재', // dead
+      '8/2|14|민재',
+      '8/2|15|민재',
+    ]
+    const { rows, runs, boundaries } = buildGanyeonExport(
+      bookings,
+      NO_OVERRIDE,
+      ctx,
+    )
+    // run 이 오전/오후 둘로 분리 — 죽은 13시 칸이 다리가 되지 않는다
+    expect(runs.get('8/2')).toEqual([
+      [10, 13],
+      [14, 16],
+    ])
+    // 13·14 경계 스위치가 UI(boundaries)에 나타나지 않는다
+    expect(boundaries.map((b) => b.hour)).toEqual([11, 12, 15])
+    expect(buildTsv(rows, START_DATE)).toBe(
+      '2026. 8. 2\t10\t13\t갠연\t\t민재\n' + '2026. 8. 2\t14\t16\t갠연\t\t민재',
+    )
   })
 })
 
@@ -373,8 +416,13 @@ describe('exportMemberEntry — 괄호 메모 규칙', () => {
     ).toBe('민재(~13:50,14:10~)')
   })
 
-  it('30분 미만이면 null', () => {
-    expect(exportMemberEntry('민재', [[B0, B0 + 29]], B0, B1, false)).toBeNull()
+  it('유효 구간 0분이면 null, 1분이라도 있으면 포함', () => {
+    expect(exportMemberEntry('민재', [], B0, B1, false)).toBeNull()
+    // 블록과 겹치는 구간이 전혀 없는 slices 도 0분 → null
+    expect(exportMemberEntry('민재', [[B1, B1 + 60]], B0, B1, false)).toBeNull()
+    expect(exportMemberEntry('민재', [[B0, B0 + 1]], B0, B1, false)).toBe(
+      '민재(~13:01)',
+    )
   })
 
   it('미정이면 메모 끝에 미정', () => {

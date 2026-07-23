@@ -93,3 +93,15 @@ export function formatDuration(min: number): string {
   if (h > 0) return `${h}시간`
   return `${m}분`
 }
+
+/**
+ * 좁은 캡션용 시간 표기 — "45분", "2시간", "1:30"(=1시간 30분).
+ * 주간 스트립/월 달력 캡션 공용. 분 단위 손실 없음 (반올림 금지).
+ */
+export function formatDurationShort(min: number): string {
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  if (h === 0) return `${m}분`
+  if (m === 0) return `${h}시간`
+  return `${h}:${String(m).padStart(2, '0')}`
+}

@@ -76,8 +76,9 @@ describe('App — 로드/렌더 스모크', () => {
     // 팀연습 오버레이 (곡A, 16:45~18:00)
     expect(screen.getByTitle(/곡A 16:45~18:00/)).toBeInTheDocument()
 
-    // 예약 8/1|13|민재 — 가용 ~14:30 → 13시 칸 유효 60분 → 누적 "1시간"
-    expect(screen.getByText('1시간')).toBeInTheDocument()
+    // 예약 8/1|13|민재 — 가용 ~14:30 → 13시 칸 유효 60분.
+    // "1시간" 은 두 곳: 민재 누적 시간 + 8/1 주간 스트립 캡션(유효 분 합계)
+    expect(screen.getAllByText('1시간')).toHaveLength(2)
 
     // 지수 8/1 = X(미정) → 이름 열 미정 배지
     expect(screen.getByText('미정')).toBeInTheDocument()
@@ -91,6 +92,31 @@ describe('App — 로드/렌더 스모크', () => {
       name: /민재 13시 칸 — 갠연 예약됨/,
     })
     expect(cell).toBeDisabled()
+  })
+
+  it('주간 스트립 캡션 — 칸 수가 아니라 유효 분 합계 (30분 예약 → "30분")', async () => {
+    // 민재 8/1 가용 ~13:30, 13시 칸 예약 → 유효 30분. 칸 수 기준이면 "1" 이 보였을 상황.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url.startsWith(SURVEY_URL))
+          return jsonResponse({
+            ...surveyPayload,
+            availability: { 민재: { '8/1': '~13:30', '8/2': 'O' } },
+          })
+        if (url.startsWith(GANYEON_URL))
+          return jsonResponse({ ok: true, teamRows: [], bookings: ['8/1|13|민재'] })
+        throw new Error('unexpected fetch: ' + url)
+      }),
+    )
+    render(<App />)
+    await waitFor(() => {
+      expect(screen.getByText('민재')).toBeInTheDocument()
+    })
+    // 주간 스트립의 8/1 칸 캡션이 30분에 해당하는 값
+    const dayBtn = screen.getAllByRole('button', { name: '8월 1일' })[0]
+    expect(within(dayBtn).getByText('30분')).toBeInTheDocument()
   })
 
   it('관리자 아님 → TSV 버튼 없음, 관리자 버튼 표시', async () => {

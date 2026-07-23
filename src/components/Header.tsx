@@ -6,8 +6,8 @@ import { ChevronLeftIcon, ChevronRightIcon, RefreshIcon } from './icons'
 interface Props {
   selDate: Date
   today: Date
-  /** 자정 ms → 그날 갠연 예약 칸 수 (주간 스트립/월 달력 캡션). */
-  countByDay: Map<number, number>
+  /** 자정 ms → 그날 유효 갠연 분 합계 (주간 스트립/월 달력 캡션). */
+  minutesByDay: Map<number, number>
   loading: boolean
   /** 마지막 성공 갱신 시각 — 아직 없으면 null. */
   updatedAt: Date | null
@@ -34,7 +34,7 @@ const fmtClock = (d: Date) =>
 const Header: FC<Props> = ({
   selDate,
   today,
-  countByDay,
+  minutesByDay,
   loading,
   updatedAt,
   isAdmin,
@@ -154,7 +154,7 @@ const Header: FC<Props> = ({
       <WeekStrip
         selDate={selDate}
         today={today}
-        countByDay={countByDay}
+        minutesByDay={minutesByDay}
         onSelect={onGoto}
       />
 

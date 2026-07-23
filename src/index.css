@@ -157,7 +157,7 @@ body {
   }
 }
 
-/* 유효 구간이 사라진(stale) 예약 칸 — 회색 빗금 오버레이 */
+/* 유효 구간이 사라진(죽은) 예약 칸 — 회색 빗금 오버레이 */
 .stale-hatch {
   background: repeating-linear-gradient(
     135deg,

@@ -20,6 +20,8 @@ interface Props {
   bookings: ReadonlySet<string>
   /** `M/D|H` → override 상태. */
   overrides: ReadonlyMap<string, BoundaryState>
+  /** 진행 중(미확정) POST 가 있는지 — true 면 복사를 막는다. */
+  hasPendingOps: () => boolean
   onToggleBoundary: (b: ExportBoundary) => void
   onResetDate: (dateKey: string) => void
   onToast: (message: string) => void
@@ -46,6 +48,7 @@ const ExportPreviewInner: FC<Props> = ({
   model,
   bookings,
   overrides,
+  hasPendingOps,
   onToggleBoundary,
   onResetDate,
   onToast,
@@ -70,6 +73,11 @@ const ExportPreviewInner: FC<Props> = ({
   const dates = model.dateKeys.filter((d) => comp.runs.has(d))
 
   const copy = async () => {
+    // 서버에 아직 확정되지 않은 변경이 있으면 지금 화면의 TSV 를 믿을 수 없다
+    if (hasPendingOps()) {
+      onToast('저장 중인 변경이 있어요. 잠시 후 다시 시도해 주세요.')
+      return
+    }
     if (comp.rows.length === 0) {
       onToast('내보낼 수 있는 행이 없어요 (경고 패널 참고).')
       return

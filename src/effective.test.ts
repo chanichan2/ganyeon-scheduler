@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseAvailability } from './availability'
-import {
-  cellBoundaryMemos,
-  effectiveCellSlices,
-  MIN_BOOKABLE_MIN,
-} from './effective'
+import { cellBoundaryMemos, effectiveCellSlices } from './effective'
 
 /** 조사 범위 — 9:00~22:00. */
 const START = 9 * 60
@@ -19,9 +15,9 @@ describe('클리핑 엔진 — 유효 구간 = 칸 ∩ 가용 − 팀연습', ()
     expect(c13.total).toBe(60)
     expect(c14.slices).toEqual([[840, 870]])
     expect(c14.total).toBe(30)
-    // 두 칸 모두 클릭 가능 (합계 ≥ 30분)
-    expect(c13.total >= MIN_BOOKABLE_MIN).toBe(true)
-    expect(c14.total >= MIN_BOOKABLE_MIN).toBe(true)
+    // 두 칸 모두 클릭 가능 (유효 구간 존재)
+    expect(c13.total > 0).toBe(true)
+    expect(c14.total > 0).toBe(true)
   })
 
   it('팀연습 16:45~18:00 → 16시 칸 유효 구간 16:00~16:45 (45분)', () => {
@@ -44,19 +40,20 @@ describe('클리핑 엔진 — 유효 구간 = 칸 ∩ 가용 − 팀연습', ()
       [960, 980],
       [1010, 1020],
     ])
-    expect(c16.total).toBe(30) // 20 + 10 — 조각별이 아니라 합계 기준으로 클릭 가능
-    expect(c16.total >= MIN_BOOKABLE_MIN).toBe(true)
+    expect(c16.total).toBe(30) // 20 + 10 — 두 조각의 합계
+    expect(c16.total > 0).toBe(true)
   })
 
-  it('유효 합계 29분 칸은 클릭 불가, 30분 칸은 클릭 가능', () => {
-    const avail29 = parseAvailability('~13:29', START, END)
-    const avail30 = parseAvailability('~13:30', START, END)
-    const c29 = effectiveCellSlices(780, 840, avail29.ranges, [])
-    const c30 = effectiveCellSlices(780, 840, avail30.ranges, [])
-    expect(c29.total).toBe(29)
-    expect(c29.total >= MIN_BOOKABLE_MIN).toBe(false)
-    expect(c30.total).toBe(30)
-    expect(c30.total >= MIN_BOOKABLE_MIN).toBe(true)
+  it('유효 합계 0분 칸은 클릭 불가, 1분 이상이면 클릭 가능', () => {
+    // 유효 1분 — 짧아도 관리자가 경계 텍스트를 보고 의도적으로 잡을 수 있다
+    const avail1 = parseAvailability('~13:01', START, END)
+    const c1 = effectiveCellSlices(780, 840, avail1.ranges, [])
+    expect(c1.total).toBe(1)
+    expect(c1.total > 0).toBe(true)
+    // 유효 0분 — 가용 없음
+    const c0 = effectiveCellSlices(780, 840, [], [])
+    expect(c0.total).toBe(0)
+    expect(c0.total > 0).toBe(false)
   })
 
   it('가용 없음(X/빈 셀/파싱 실패) → 유효 0분', () => {

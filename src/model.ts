@@ -4,18 +4,14 @@
  *
  * 예약(bookings)에 의존하지 않는 정적 모델: 가용시간 파싱, 팀연습 파싱,
  * 칸별 유효 구간/경계 텍스트, 경고(1~5, 7번).
- * 예약 의존 계산(잡힘/stale/누적시간/6번 경고)은 별도 함수로 분리 —
+ * 예약 의존 계산(잡힘/죽은 예약/누적시간/6번 경고)은 별도 함수로 분리 —
  * 클릭마다 전체 모델을 다시 만들지 않기 위함.
  */
 
 import { parseAvailability } from './availability'
 import { parseBookingKey } from './bookingKey'
 import { dateKeyToDate, formatDateShort, parseStartDate } from './dates'
-import {
-  cellBoundaryMemos,
-  effectiveCellSlices,
-  MIN_BOOKABLE_MIN,
-} from './effective'
+import { cellBoundaryMemos, effectiveCellSlices } from './effective'
 import { mergeRanges, formatTime } from './ranges'
 import { parseTeamRows } from './teamSchedule'
 import type {
@@ -240,23 +236,24 @@ export function buildScheduleModel(
 /* ── 예약 의존 계산 ───────────────────────────────────────────── */
 
 export interface BookingIssues {
-  /** 6번(유효 구간 소멸/30분 미만) + 매칭 실패 booking 경고. */
+  /** 6번(유효 구간 소멸) + 매칭 실패 booking 경고. */
   warnings: AppWarning[]
-  /** 화면에 회색(stale)으로 표시할 key 집합 — 유효 구간 < 30분. */
-  staleKeys: Set<string>
+  /** 죽은 예약 key 집합 — 유효 구간이 0분. 회색 빗금 표시 + TSV/누적 제외. */
+  deadKeys: Set<string>
 }
 
 /**
  * 저장된 booking 들을 현재 데이터에 대조 — 조용히 지우지 않는다.
  * 매칭 실패(명단에 없는 이름/기간 밖 날짜/범위 밖 시각)와 유효 구간이
- * 30분 미만이 된 예약을 경고로 만든다.
+ * 완전히 사라진(0분) 예약을 경고로 만든다. 유효 구간이 1분이라도 남은
+ * 예약은 정상 — 화면·TSV·누적에 그대로 포함된다.
  */
 export function computeBookingIssues(
   model: ScheduleModel,
   bookings: Iterable<string>,
 ): BookingIssues {
   const warnings: AppWarning[] = []
-  const staleKeys = new Set<string>()
+  const deadKeys = new Set<string>()
   for (const key of bookings) {
     const ref = parseBookingKey(key)
     if (!ref) {
@@ -294,29 +291,26 @@ export function computeBookingIssues(
       avail.ranges,
       model.teamRangesOf(ref.member, ref.dateKey),
     )
-    if (total < MIN_BOOKABLE_MIN) {
-      staleKeys.add(key)
+    if (total === 0) {
+      deadKeys.add(key)
       warnings.push({
         kind: 'stale-booking',
-        message: `예약 ${ref.dateKey} ${formatTime(ref.hour * 60)} ${ref.member} — 유효 구간이 ${total}분으로 줄었어요`,
+        message: `예약 ${ref.dateKey} ${formatTime(ref.hour * 60)} ${ref.member} — 유효 구간이 사라졌어요`,
         detail:
-          '팀연습 재붙여넣기 또는 가용시간 수정으로 유효 구간이 30분 미만이 됐어요. ' +
-          '화면에 회색으로 남아 있으니 관리자 모드에서 칸을 클릭해 직접 제거할 수 있어요.',
+          '팀연습 재붙여넣기 또는 가용시간 수정으로 이 칸에 유효 구간이 남아 있지 않아요. ' +
+          '화면에 회색 빗금으로 남아 있으니 관리자 모드에서 칸을 클릭해 직접 제거할 수 있어요.',
       })
     }
   }
-  return { warnings, staleKeys }
+  return { warnings, deadKeys }
 }
 
-/**
- * 부원별 전체 기간 누적 갠연 시간 (분) — 클릭한 칸 수가 아니라
- * 유효 구간의 실제 분 합계.
- */
-export function cumulativeMinutesByMember(
+/** 현재 데이터와 매칭되는 예약마다 유효 분 합계를 콜백 — 누적 계산 공용. */
+function eachValidBookingTotal(
   model: ScheduleModel,
   bookings: Iterable<string>,
-): Map<string, number> {
-  const out = new Map<string, number>()
+  cb: (member: string, dateKey: string, total: number) => void,
+): void {
   for (const key of bookings) {
     const ref = parseBookingKey(key)
     if (!ref) continue
@@ -330,7 +324,37 @@ export function cumulativeMinutesByMember(
       avail.ranges,
       model.teamRangesOf(ref.member, ref.dateKey),
     )
-    out.set(ref.member, (out.get(ref.member) ?? 0) + total)
+    cb(ref.member, ref.dateKey, total)
   }
+}
+
+/**
+ * 부원별 전체 기간 누적 갠연 시간 (분) — 클릭한 칸 수가 아니라
+ * 유효 구간의 실제 분 합계. 죽은(0분) 예약은 자연히 0 기여.
+ */
+export function cumulativeMinutesByMember(
+  model: ScheduleModel,
+  bookings: Iterable<string>,
+): Map<string, number> {
+  const out = new Map<string, number>()
+  eachValidBookingTotal(model, bookings, (member, _dateKey, total) => {
+    out.set(member, (out.get(member) ?? 0) + total)
+  })
+  return out
+}
+
+/**
+ * 날짜별(전 부원 합산) 유효 갠연 분 합계 — 주간 스트립/월 달력 캡션용.
+ * 예약 칸 수가 아니라 유효 분 기준이라 부분 참여·죽은 예약에 왜곡되지 않는다.
+ * 합계가 0 인 날짜는 담지 않는다.
+ */
+export function cumulativeMinutesByDate(
+  model: ScheduleModel,
+  bookings: Iterable<string>,
+): Map<string, number> {
+  const out = new Map<string, number>()
+  eachValidBookingTotal(model, bookings, (_member, dateKey, total) => {
+    if (total > 0) out.set(dateKey, (out.get(dateKey) ?? 0) + total)
+  })
   return out
 }
